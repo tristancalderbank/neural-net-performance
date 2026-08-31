@@ -1,4 +1,6 @@
 #include <iostream>
+#include <algorithm>
+#include <chrono>
 #include <random>
 #include <vector>
 #include <filesystem>
@@ -8,26 +10,37 @@
 #include "image_loader.h"
 
 constexpr unsigned int OUTPUT_LAYER_SIZE = 10;
-constexpr unsigned int HIDDEN_LAYER_SIZE = 16;
+constexpr unsigned int HIDDEN_LAYER_SIZE = 64;
+constexpr unsigned int NUM_TRAINING_IMAGES = 60000;
+constexpr unsigned int NUM_TEST_IMAGES = 10000;
+constexpr float LEARNING_RATE = 3.0f;
+constexpr unsigned int NUM_EPOCHS = 30;
+constexpr unsigned int BATCH_SIZE = 10;
 
 float inputLayerActivation[INPUT_LAYER_SIZE];
 
 float layer1Weights[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE]; // each node has 1 link to each pixel
 float layer1WeightsGrad[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
+float layer1WeightsGradTotal[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
 float layer1Bias[HIDDEN_LAYER_SIZE];
 float layer1BiasGrad[HIDDEN_LAYER_SIZE];
+float layer1BiasGradTotal[HIDDEN_LAYER_SIZE];
 float layer1Activation[HIDDEN_LAYER_SIZE];
 
 float layer2Weights[HIDDEN_LAYER_SIZE][HIDDEN_LAYER_SIZE]; // each node has 1 link to each node in layer1
 float layer2WeightsGrad[HIDDEN_LAYER_SIZE][HIDDEN_LAYER_SIZE];
+float layer2WeightsGradTotal[HIDDEN_LAYER_SIZE][HIDDEN_LAYER_SIZE];
 float layer2Bias[HIDDEN_LAYER_SIZE];
 float layer2BiasGrad[HIDDEN_LAYER_SIZE];
+float layer2BiasGradTotal[HIDDEN_LAYER_SIZE];
 float layer2Activation[HIDDEN_LAYER_SIZE];
 
 float outputLayerWeights[OUTPUT_LAYER_SIZE][HIDDEN_LAYER_SIZE];
 float outputLayerWeightsGrad[OUTPUT_LAYER_SIZE][HIDDEN_LAYER_SIZE];
+float outputLayerWeightsGradTotal[OUTPUT_LAYER_SIZE][HIDDEN_LAYER_SIZE];
 float outputLayerBias[OUTPUT_LAYER_SIZE];
 float outputLayerBiasGrad[OUTPUT_LAYER_SIZE];
+float outputLayerBiasGradTotal[OUTPUT_LAYER_SIZE];
 float outputLayerActivation[OUTPUT_LAYER_SIZE];
 
 void initializeNetwork()
@@ -139,7 +152,7 @@ float calculateLoss(const Image& image)
     return loss * 0.5; // used to avoid the 2.0f in the gradient 
 }
 
-void fillExpectedOutputVector(float* output, int label)
+void getExpectedOutputVector(float* output, int label)
 {
     for (int i = 0; i < OUTPUT_LAYER_SIZE; i++)
     {
@@ -258,33 +271,215 @@ void calculateGradientBackPropagation(float* expectedResult)
     }
 }
 
+void clearGradientTotals()
+{
+    // layer 1/2
+    for (int i = 0; i < HIDDEN_LAYER_SIZE; i++)
+    {
+        // layer 1
+        for (int j = 0; j < INPUT_LAYER_SIZE; j++)
+        {
+            layer1WeightsGradTotal[i][j] = 0.0f;
+        }
+
+        layer1BiasGradTotal[i] = 0.0f;
+
+        // layer 2
+        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
+        {
+            layer2WeightsGradTotal[i][j] = 0.0f;
+        }
+
+        layer2BiasGradTotal[i] = 0.0f;
+    }
+
+    // output layer
+    for (int i = 0; i < OUTPUT_LAYER_SIZE; i++)
+    {
+        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
+        {
+            outputLayerWeightsGradTotal[i][j] = 0.0f;
+        }
+
+        outputLayerBiasGradTotal[i] = 0.0f;
+    }
+}
+
+void accumGradient(float scaleFactor)
+{
+    // layer 1/2
+    for (int i = 0; i < HIDDEN_LAYER_SIZE; i++)
+    {
+        // layer 1
+        for (int j = 0; j < INPUT_LAYER_SIZE; j++)
+        {
+            layer1WeightsGradTotal[i][j] += layer1WeightsGrad[i][j] * scaleFactor;
+        }
+
+        layer1BiasGradTotal[i] += layer1BiasGrad[i] * scaleFactor;
+
+        // layer 2
+        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
+        {
+            layer2WeightsGradTotal[i][j] += layer2WeightsGrad[i][j] * scaleFactor;
+        }
+
+        layer2BiasGradTotal[i] += layer2BiasGrad[i] * scaleFactor;
+    }
+
+    // output layer
+    for (int i = 0; i < OUTPUT_LAYER_SIZE; i++)
+    {
+        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
+        {
+            outputLayerWeightsGradTotal[i][j] += outputLayerWeightsGrad[i][j] * scaleFactor;
+        }
+
+        outputLayerBiasGradTotal[i] += outputLayerBiasGrad[i] * scaleFactor;
+    }
+}
+
+void applyGradientStep()
+{
+    // layer 1/2
+    for (int i = 0; i < HIDDEN_LAYER_SIZE; i++)
+    {
+        // layer 1
+        for (int j = 0; j < INPUT_LAYER_SIZE; j++)
+        {
+            layer1Weights[i][j] -= layer1WeightsGradTotal[i][j] * LEARNING_RATE;
+        }
+
+        layer1Bias[i] -= layer1BiasGradTotal[i] * LEARNING_RATE;
+
+        // layer 2
+        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
+        {
+            layer2Weights[i][j] -= layer2WeightsGradTotal[i][j] * LEARNING_RATE;
+        }
+
+        layer2Bias[i] -= layer2BiasGradTotal[i] * LEARNING_RATE;
+    }
+
+    // output layer
+    for (int i = 0; i < OUTPUT_LAYER_SIZE; i++)
+    {
+        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
+        {
+            outputLayerWeights[i][j] -= outputLayerWeightsGradTotal[i][j] * LEARNING_RATE;
+        }
+
+        outputLayerBias[i] -= outputLayerBiasGradTotal[i] * LEARNING_RATE;
+    }
+}
+
+int getPredictedLabel()
+{
+    int index = 0;
+
+    for (int i = 1; i < OUTPUT_LAYER_SIZE; i++)
+    {
+        if (outputLayerActivation[i] > outputLayerActivation[index])
+            index = i;
+    }
+
+    return index;
+}
+
 int main()
 {
-    std::vector<Image> images;
+    std::vector<Image> trainingImages;
+    std::vector<Image> testImages;
     const std::string currentWorkingDirectory = std::filesystem::current_path().string();
     std::cout << "Working directory: " << currentWorkingDirectory << "\n";
 
     if (!loadDataset(
             "mnist_dataset/train-images.idx3-ubyte",
             "mnist_dataset/train-labels.idx1-ubyte",
-            images))
+        trainingImages))
     {
-        std::cerr << "Could not load MNIST images\n";
+        std::cerr << "Could not load MNIST traning images\n";
+        return 1;
+    }
+
+    if (!loadDataset(
+        "mnist_dataset/t10k-images.idx3-ubyte",
+        "mnist_dataset/t10k-labels.idx1-ubyte",
+        testImages))
+    {
+        std::cerr << "Could not load MNIST test images\n";
         return 1;
     }
 
     initializeNetwork();
 
-    Image& image = images[12345];
+    // training
+    std::random_device rd;
+    std::mt19937 g(rd());
+    const auto trainingStart = std::chrono::steady_clock::now();
 
-    forwardPass(image);
+    for (int epoch = 0; epoch < NUM_EPOCHS; epoch++)
+    {
+        std::shuffle(trainingImages.begin(), trainingImages.end(), g);
+        int epochCorrect = 0;
+        float epochLoss = 0.0f;
 
-    float expectedResult[OUTPUT_LAYER_SIZE];
+        for (int i = 0; i < NUM_TRAINING_IMAGES; i += BATCH_SIZE)
+        {
+            const int currBatchSize = std::min(BATCH_SIZE, NUM_TRAINING_IMAGES - i);
 
-    fillExpectedOutputVector(expectedResult, image.label);
+            clearGradientTotals();
 
-    calculateGradientBackPropagation(expectedResult);
+            for (int j = i; j < (i + BATCH_SIZE) && j < NUM_TRAINING_IMAGES; j++)
+            {
+                Image& image = trainingImages[j];
 
-    std::cout << "Loaded " << images.size() << " images\n";
+                float expectedResult[OUTPUT_LAYER_SIZE];
+                getExpectedOutputVector(expectedResult, image.label);
+
+                forwardPass(image);
+
+                int predictedLabel = getPredictedLabel();
+                if (predictedLabel == image.label)
+                    epochCorrect++;
+
+                epochLoss += calculateLoss(image);
+
+                calculateGradientBackPropagation(expectedResult);
+
+                accumGradient(1.0f / currBatchSize);
+            }
+            // take a gradient step
+            applyGradientStep();
+        }
+
+        const float epochAccuracy = 100.0f * epochCorrect / NUM_TRAINING_IMAGES;
+        const float averageEpochLoss = epochLoss / NUM_TRAINING_IMAGES;
+        std::cout << "Epoch " << (epoch + 1)
+            << ": loss = " << averageEpochLoss
+            << ", accuracy = " << epochAccuracy << "%\n";
+    }
+
+    const auto trainingEnd = std::chrono::steady_clock::now();
+    const std::chrono::duration<double> trainingDuration = trainingEnd - trainingStart;
+    std::cout << "Training time: " << trainingDuration.count() << " seconds\n";
+
+    // test evaluation
+    int testCorrect = 0;
+
+    for (int i = 0; i < NUM_TEST_IMAGES; i++)
+    {
+        Image& image = testImages[i];
+
+        forwardPass(image);
+
+        int predictedLabel = getPredictedLabel();
+        if (predictedLabel == image.label)
+            testCorrect++;
+    }
+
+    const float testAccuracy = 100.0f * testCorrect / NUM_TEST_IMAGES;
+    std::cout << "\nTest Accuracy: " << testAccuracy << "\n";
+
     return 0;
 }
