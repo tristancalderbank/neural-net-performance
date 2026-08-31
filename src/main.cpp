@@ -13,15 +13,21 @@ constexpr unsigned int HIDDEN_LAYER_SIZE = 16;
 float inputLayerActivation[INPUT_LAYER_SIZE];
 
 float layer1Weights[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE]; // each node has 1 link to each pixel
+float layer1WeightsGrad[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
 float layer1Bias[HIDDEN_LAYER_SIZE];
+float layer1BiasGrad[HIDDEN_LAYER_SIZE];
 float layer1Activation[HIDDEN_LAYER_SIZE];
 
 float layer2Weights[HIDDEN_LAYER_SIZE][HIDDEN_LAYER_SIZE]; // each node has 1 link to each node in layer1
+float layer2WeightsGrad[HIDDEN_LAYER_SIZE][HIDDEN_LAYER_SIZE];
 float layer2Bias[HIDDEN_LAYER_SIZE];
+float layer2BiasGrad[HIDDEN_LAYER_SIZE];
 float layer2Activation[HIDDEN_LAYER_SIZE];
 
 float outputLayerWeights[OUTPUT_LAYER_SIZE][HIDDEN_LAYER_SIZE];
+float outputLayerWeightsGrad[OUTPUT_LAYER_SIZE][HIDDEN_LAYER_SIZE];
 float outputLayerBias[OUTPUT_LAYER_SIZE];
+float outputLayerBiasGrad[OUTPUT_LAYER_SIZE];
 float outputLayerActivation[OUTPUT_LAYER_SIZE];
 
 void initializeNetwork()
@@ -130,7 +136,126 @@ float calculateLoss(const Image& image)
         loss += diff * diff;
     }
 
-    return loss;
+    return loss * 0.5; // used to avoid the 2.0f in the gradient 
+}
+
+void fillExpectedOutputVector(float* output, int label)
+{
+    for (int i = 0; i < OUTPUT_LAYER_SIZE; i++)
+    {
+        if (label == i)
+            output[i] = 1.0f;
+        else
+            output[i] = 0.0f;
+    }
+}
+
+// y is desired activation
+// j = index in the current layer L
+// k = index in the previous layer L - 1
+// z_L is the activation of neuron j but without the sigmoid
+// 
+// Cost function: C_0 =  0.5 ((a1 - y1)^2 + (a2 - y2)^2 ... (an - yn)^2)
+// * 1, 2, 3 is index of output layer neurons
+// * _0 is training example 0
+// * We add the 0.5 to cancel out the 2.0 from derived gradient
+// 
+// Derived gradients:
+// 
+// Weight gradient: 2.0f * (activation_L - y) * sigmoidDerivative(z_L) * activation_L_minus_1;
+// Bias gradient: 2.0f * (activation_L - y) * sigmoidDerivative(z_L)
+// 
+void calculateGradientBackPropagation(float* expectedResult)
+{
+    // output layer
+    for (int currIndex = 0; currIndex < OUTPUT_LAYER_SIZE; currIndex++)
+    {
+        float y = expectedResult[currIndex];
+        float activation = outputLayerActivation[currIndex];
+        float activationGrad = (activation - y);
+
+        // sigmoid derivative: sigmoid(z_L) * (1.0f - sigmoid(z_L))
+        // 
+        // simplification: activation_L is already sigmoid(z_L) so no need to re-calculate it 
+
+        float sigmoidDerivative = activation * (1.0f - activation);
+        float biasGrad = activationGrad * sigmoidDerivative;
+
+        outputLayerBiasGrad[currIndex] = biasGrad;
+
+        for (int prevIndex = 0; prevIndex < HIDDEN_LAYER_SIZE; prevIndex++)
+        {
+            float activationPrev = layer2Activation[prevIndex];
+            float weightGrad = biasGrad * activationPrev;
+            
+            outputLayerWeightsGrad[currIndex][prevIndex] = weightGrad;
+        }
+    }
+
+    // hidden layer 2
+    for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
+    {
+        // first calculate the derivative of cost function wrt our own activation dC / da_k
+
+        float activationGrad = 0.0f;
+
+        for (int nextIndex = 0; nextIndex < OUTPUT_LAYER_SIZE; nextIndex++)
+        {
+            // float y = expectedResult[j];
+            // float nextLayerActivation = outputLayerActivation[j];
+            // float sigmoidDerivative = nextLayerActivation * (1.0f - nextLayerActivation);
+            // result += (nextLayerActivation - y) * sigmoidDerivative * outputLayerWeights[j][k];
+
+            // The above simplifies a lot because output layer biasGrad is already most of the calculcation
+            // MAJOR KEY: this is where we propagate the gradient
+            activationGrad += outputLayerBiasGrad[nextIndex] * outputLayerWeights[nextIndex][currIndex];
+        }
+
+        float activation = layer2Activation[currIndex];
+
+        float sigmoidDerivative = activation * (1.0f - activation);
+
+        float biasGrad = activationGrad * sigmoidDerivative;
+        
+        layer2BiasGrad[currIndex] = biasGrad;
+
+        for (int prevIndex = 0; prevIndex < HIDDEN_LAYER_SIZE; prevIndex++)
+        {
+            float activationPrev = layer1Activation[prevIndex];
+            float weightGrad = biasGrad * activationPrev;
+
+            layer2WeightsGrad[currIndex][prevIndex] = weightGrad;
+        }
+    }
+
+    // hidden layer 1
+    for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
+    {
+        // first calculate the derivative of cost function wrt our own activation dC / da_k
+
+        float activationGrad = 0.0f;
+
+        for (int nextIndex = 0; nextIndex < HIDDEN_LAYER_SIZE; nextIndex++)
+        {
+            activationGrad += layer2BiasGrad[nextIndex] * layer2Weights[nextIndex][currIndex];
+        }
+
+        float activation = layer1Activation[currIndex];
+
+        float sigmoidDerivative = activation * (1.0f - activation);
+
+        float biasGrad = activationGrad * sigmoidDerivative;
+
+        layer1BiasGrad[currIndex] = biasGrad;
+
+        for (int prevIndex = 0; prevIndex < INPUT_LAYER_SIZE; prevIndex++)
+        {
+            float activationPrev = inputLayerActivation[prevIndex];
+            float weightGrad = biasGrad * activationPrev;
+
+            layer1WeightsGrad[currIndex][prevIndex] = weightGrad;
+        }
+    }
 }
 
 int main()
@@ -154,9 +279,11 @@ int main()
 
     forwardPass(image);
 
-    float loss = calculateLoss(image);
+    float expectedResult[OUTPUT_LAYER_SIZE];
 
-    std::cout << "Loss: " << loss;
+    fillExpectedOutputVector(expectedResult, image.label);
+
+    calculateGradientBackPropagation(expectedResult);
 
     std::cout << "Loaded " << images.size() << " images\n";
     return 0;
