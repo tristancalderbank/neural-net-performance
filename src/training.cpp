@@ -77,30 +77,10 @@ void calculateGradientBackPropagation(const Image& image)
     }
 
     // hidden layer 2
-    //float layer2ActivationGrad[HIDDEN_LAYER_SIZE] = {};
-    //for (int nextIndex = 0; nextIndex < OUTPUT_LAYER_SIZE; nextIndex++)
-    //{
-    //    for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
-    //    {
-    //        // float y = expectedResult[j];
-    //        // float nextLayerActivation = outputLayerActivation[j];
-    //        // float sigmoidDerivative = nextLayerActivation * (1.0f - nextLayerActivation);
-    //        // result += (nextLayerActivation - y) * sigmoidDerivative * outputLayerWeights[j][k];
-
-    //        // The above simplifies a lot because output layer biasGrad is already most of the calculcation
-    //        // MAJOR KEY: this is where we propagate the gradient
-    //        layer2ActivationGrad[currIndex] += outputLayerBiasGrad[nextIndex] * outputLayerWeights[nextIndex][currIndex];
-    //    }
-    //}
-
-    for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
+    float layer2ActivationGrad[HIDDEN_LAYER_SIZE] = {};
+    for (int nextIndex = 0; nextIndex < OUTPUT_LAYER_SIZE; nextIndex++)
     {
-        // first calculate the derivative of cost function wrt our own activation dC / da_k
-
-        float activationGrad = 0.0f;
-        //float activationGrad = layer2ActivationGrad[currIndex];
-
-        for (int nextIndex = 0; nextIndex < OUTPUT_LAYER_SIZE; nextIndex++)
+        for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
         {
             // float y = expectedResult[j];
             // float nextLayerActivation = outputLayerActivation[j];
@@ -109,8 +89,15 @@ void calculateGradientBackPropagation(const Image& image)
 
             // The above simplifies a lot because output layer biasGrad is already most of the calculcation
             // MAJOR KEY: this is where we propagate the gradient
-            activationGrad += outputLayerBiasGrad[nextIndex] * outputLayerWeights[nextIndex][currIndex];
+            layer2ActivationGrad[currIndex] += outputLayerBiasGrad[nextIndex] * outputLayerWeights[nextIndex][currIndex];
         }
+    }
+
+    for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
+    {
+        // first calculate the derivative of cost function wrt our own activation dC / da_k
+
+        float activationGrad = layer2ActivationGrad[currIndex];
 
         float activation = layer2Activation[currIndex];
 
@@ -131,27 +118,21 @@ void calculateGradientBackPropagation(const Image& image)
     }
 
     // hidden layer 1
-    //float layer1ActivationGrad[HIDDEN_LAYER_SIZE] = {};
-    //for (int nextIndex = 0; nextIndex < HIDDEN_LAYER_SIZE; nextIndex++)
-    //{
-    //    for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
-    //    {
-    //        layer1ActivationGrad[currIndex] += layer2BiasGrad[nextIndex] * layer2Weights[nextIndex][currIndex];
-    //    }
-    //}
+    float layer1ActivationGrad[HIDDEN_LAYER_SIZE] = {};
+    for (int nextIndex = 0; nextIndex < HIDDEN_LAYER_SIZE; nextIndex++)
+    {
+        for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
+        {
+            layer1ActivationGrad[currIndex] += layer2BiasGrad[nextIndex] * layer2Weights[nextIndex][currIndex];
+        }
+    }
 
 
     for (int currIndex = 0; currIndex < HIDDEN_LAYER_SIZE; currIndex++)
     {
         // first calculate the derivative of cost function wrt our own activation dC / da_k
 
-        float activationGrad = 0.0f;
-        //float activationGrad = layer1ActivationGrad[currIndex];
-
-        for (int nextIndex = 0; nextIndex < HIDDEN_LAYER_SIZE; nextIndex++)
-        {
-            activationGrad += layer2BiasGrad[nextIndex] * layer2Weights[nextIndex][currIndex];
-        }
+        float activationGrad = layer1ActivationGrad[currIndex];
 
         float activation = layer1Activation[currIndex];
 
