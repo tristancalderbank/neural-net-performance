@@ -19,4 +19,5 @@
 
 | Version | Training time | Inference time |
 | --- | ---: | ---: |
-| Initial naive implementation | 685.3s | 2.257s |
+| initial naive implementation | 685.3s | 2.257s |
+| loop reordering | 565.3s | 2.257s |
