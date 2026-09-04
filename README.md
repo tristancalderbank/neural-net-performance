@@ -20,3 +20,5 @@ Optimizing performance of hand-coded neural net.
 | --- | ---: | ---: |
 | initial naive implementation (c++) | 685.3s | 2.257s |
 | loop reordering | 565.3s | 2.257s |
+| fma intrinsics for forward pass dot products | 223.768s | 0.338056s |
+| fma intrinsics for layer 1 gradient calc | 133.741s | 0.350689s |

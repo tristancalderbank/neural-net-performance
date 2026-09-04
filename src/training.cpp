@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <string>
 #include <cmath>
+#include <immintrin.h>
 
 #include "network.h"
 #include "model_io.h"
@@ -142,7 +143,22 @@ void calculateGradientBackPropagation(const Image& image)
 
         layer1BiasGradTotal[currIndex] += biasGrad;
 
-        for (int prevIndex = 0; prevIndex < INPUT_LAYER_SIZE; prevIndex++)
+        constexpr int batch = sizeof(__m256) / sizeof(float);
+        int prevIndex = 0;
+
+        __m256 vbiasGrad = _mm256_set1_ps(biasGrad);
+
+        for (; prevIndex + batch <= INPUT_LAYER_SIZE; prevIndex += batch)
+        {
+            __m256 vlayer1WeightsGradTotal = _mm256_loadu_ps(layer1WeightsGradTotal[currIndex] + prevIndex);
+            __m256 vactivationPrev = _mm256_loadu_ps(inputLayerActivation + prevIndex);
+
+            vlayer1WeightsGradTotal = _mm256_fmadd_ps(vbiasGrad, vactivationPrev, vlayer1WeightsGradTotal);
+
+            _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal);
+        }
+
+        for (; prevIndex < INPUT_LAYER_SIZE; prevIndex++)
         {
             float activationPrev = inputLayerActivation[prevIndex];
             float weightGrad = biasGrad * activationPrev;

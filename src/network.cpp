@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <random>
+#include <immintrin.h>
 
 float layer1Weights[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
 float layer1WeightsGradTotal[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
@@ -57,31 +58,61 @@ void initializeNetwork()
     }
 }
 
+inline float dotProductSIMD(const float* a, const float* b, int size)
+{
+    constexpr int batch = sizeof(__m256) / sizeof(float);
+
+    __m256 acc = _mm256_setzero_ps(); // zero accumulator [0, 0, 0, 0, 0, 0, 0, 0]
+
+    int i = 0;
+
+    for (; i + batch <= size; i += batch)
+    {
+        __m256 vecA = _mm256_loadu_ps(a + i); // load in values from a
+        __m256 vecB = _mm256_loadu_ps(b + i); // load in values from b
+
+        acc = _mm256_fmadd_ps(vecA, vecB, acc); // do FMA
+    }
+
+    // now we have everything summed but its still 8 floats in the acc
+    __m128 low = _mm256_castps256_ps128(acc); // extract lower lanes
+    __m128 high = _mm256_extractf128_ps(acc, 1); // extract upper lanes
+
+    __m128 sum = _mm_add_ps(low, high); // add low and high
+
+    sum = _mm_hadd_ps(sum, sum); // horizontal add, does [x0 + x1, x2 + x3, x0 + x1, x2 + x3]
+    sum = _mm_hadd_ps(sum, sum); // now result is in lane 0
+
+    float total = _mm_cvtss_f32(sum); // extract lowest lane
+
+    // handle tail less than 8
+    for (; i < size; i++)
+    {
+        total += a[i] * b[i];
+    }
+
+    return total;
+}
+
 void forwardPass(const Image& image)
 {
     const float* inputLayerActivation = image.pixels;
 
     for (int i = 0; i < HIDDEN_LAYER_SIZE; i++)
     {
-        layer1Activation[i] = 0.0f;
-        for (int j = 0; j < INPUT_LAYER_SIZE; j++)
-            layer1Activation[i] += layer1Weights[i][j] * inputLayerActivation[j];
+        layer1Activation[i] = dotProductSIMD(layer1Weights[i], inputLayerActivation, INPUT_LAYER_SIZE);
         layer1Activation[i] = sigmoid(layer1Activation[i] + layer1Bias[i]);
     }
 
     for (int i = 0; i < HIDDEN_LAYER_SIZE; i++)
     {
-        layer2Activation[i] = 0.0f;
-        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
-            layer2Activation[i] += layer2Weights[i][j] * layer1Activation[j];
+        layer2Activation[i] = dotProductSIMD(layer2Weights[i], layer1Activation, HIDDEN_LAYER_SIZE);
         layer2Activation[i] = sigmoid(layer2Activation[i] + layer2Bias[i]);
     }
 
     for (int i = 0; i < OUTPUT_LAYER_SIZE; i++)
     {
-        outputLayerActivation[i] = 0.0f;
-        for (int j = 0; j < HIDDEN_LAYER_SIZE; j++)
-            outputLayerActivation[i] += outputLayerWeights[i][j] * layer2Activation[j];
+        outputLayerActivation[i] = dotProductSIMD(outputLayerWeights[i], layer2Activation, HIDDEN_LAYER_SIZE);
         outputLayerActivation[i] = sigmoid(outputLayerActivation[i] + outputLayerBias[i]);
     }
 }

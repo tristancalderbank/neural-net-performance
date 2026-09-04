@@ -18,6 +18,14 @@ set_target_properties(training PROPERTIES
 
 target_compile_features(training PRIVATE cxx_std_17)
 
+if(MSVC)
+    target_compile_options(training PRIVATE /arch:AVX2 /Qvec-report:2 /EHsc
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:RelWithDebInfo>:/O2 /Zi>
+    )
+    target_link_options(training PRIVATE $<$<CONFIG:RelWithDebInfo>:/DEBUG>)
+endif()
+
 add_executable(viewer
     src/viewer.cpp
     src/network.cpp
@@ -54,3 +62,11 @@ set_target_properties(viewer PROPERTIES
 )
 
 target_compile_features(viewer PRIVATE cxx_std_17)
+
+if(MSVC)
+    target_compile_options(viewer PRIVATE /arch:AVX2 /EHsc
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:RelWithDebInfo>:/O2 /Zi>
+    )
+    target_link_options(viewer PRIVATE $<$<CONFIG:RelWithDebInfo>:/DEBUG>)
+endif()
