@@ -37,6 +37,6 @@ Optimizing performance of hand-coded neural net.
     <tr><td>loop reordering</td><td>565.3s</td><td>2.257s</td><td>437.3s</td><td>2.089s</td></tr>
     <tr><td>avx2/neon intrinsics for forward pass dot products</td><td>223.8s</td><td>0.338s</td><td>171.4s</td><td>0.597s</td></tr>
     <tr><td>avx2/neon intrinsics for layer 1 gradient calc</td><td>133.7s</td><td>0.338s</td><td>174.6s</td><td>0.597s</td></tr>
-    <tr><td>extend avx2 calcs to 4/8-way</td><td>116.2s</td><td>0.290s</td><td></td><td></td></tr>
+    <tr><td>extend avx2/neon calcs to 4/8-way</td><td>116.2s</td><td>0.290s</td><td>102.2s</td><td>0.220s</td></tr>
   </tbody>
 </table>

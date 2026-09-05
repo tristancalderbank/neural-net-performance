@@ -178,19 +178,32 @@ void calculateGradientBackPropagation(const Image& image)
             _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 24, vlayer1WeightsGradTotal3);
         }
 #elif defined(NNP_PLATFORM_MACOS)
-        constexpr int batch = sizeof(float32x4_t) / sizeof(float);
+        constexpr int batch = sizeof(float32x4_t) / sizeof(float) * 4;
         int prevIndex = 0;
         
         float32x4_t vbiasGrad = vdupq_n_f32(biasGrad);
 
         for (; prevIndex + batch <= INPUT_LAYER_SIZE; prevIndex += batch)
         {
-            float32x4_t vlayer1WeightsGradTotal = vld1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex);
-            float32x4_t vactivationPrev = vld1q_f32(inputLayerActivation + prevIndex);
+            float32x4_t vlayer1WeightsGradTotal0 = vld1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex);
+            float32x4_t vlayer1WeightsGradTotal1 = vld1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex + 4);
+            float32x4_t vlayer1WeightsGradTotal2 = vld1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex + 8);
+            float32x4_t vlayer1WeightsGradTotal3 = vld1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex + 12);
+            
+            float32x4_t vactivationPrev0 = vld1q_f32(inputLayerActivation + prevIndex);
+            float32x4_t vactivationPrev1 = vld1q_f32(inputLayerActivation + prevIndex + 4);
+            float32x4_t vactivationPrev2 = vld1q_f32(inputLayerActivation + prevIndex + 8);
+            float32x4_t vactivationPrev3 = vld1q_f32(inputLayerActivation + prevIndex + 12);
 
-            vlayer1WeightsGradTotal = vfmaq_f32(vlayer1WeightsGradTotal, vbiasGrad, vactivationPrev);
+            vlayer1WeightsGradTotal0 = vfmaq_f32(vlayer1WeightsGradTotal0, vbiasGrad, vactivationPrev0);
+            vlayer1WeightsGradTotal1 = vfmaq_f32(vlayer1WeightsGradTotal1, vbiasGrad, vactivationPrev1);
+            vlayer1WeightsGradTotal2 = vfmaq_f32(vlayer1WeightsGradTotal2, vbiasGrad, vactivationPrev2);
+            vlayer1WeightsGradTotal3 = vfmaq_f32(vlayer1WeightsGradTotal3, vbiasGrad, vactivationPrev3);
 
-            vst1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal);
+            vst1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal0);
+            vst1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex + 4, vlayer1WeightsGradTotal1);
+            vst1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex + 8, vlayer1WeightsGradTotal2);
+            vst1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex + 12, vlayer1WeightsGradTotal3);
         }
 #endif
 

@@ -132,22 +132,40 @@ inline float dotProductSIMD(const float* a, const float* b, int size)
 
     float total = _mm_cvtss_f32(sum); // extract lowest lane
 #elif defined(NNP_PLATFORM_MACOS)
-    constexpr int batch = sizeof(float32x4_t) / sizeof(float);
+    constexpr int batch = sizeof(float32x4_t) / sizeof(float) * 4;
     
-    float32x4_t acc = vdupq_n_f32(0.0f); // zero accumulator [0, 0, 0, 0]
+    float32x4_t acc0 = vdupq_n_f32(0.0f); // zero accumulator [0, 0, 0, 0]
+    float32x4_t acc1 = vdupq_n_f32(0.0f);
+    float32x4_t acc2 = vdupq_n_f32(0.0f);
+    float32x4_t acc3 = vdupq_n_f32(0.0f);
     
     int i = 0;
     
     for (; i + batch <= size; i += batch)
     {
-        float32x4_t vecA = vld1q_f32(a + i); // load in values from a
-        float32x4_t vecB = vld1q_f32(b + i); // load in values from b
+        float32x4_t vecA0 = vld1q_f32(a + i); // load in values from a
+        float32x4_t vecA1 = vld1q_f32(a + i + 4);
+        float32x4_t vecA2 = vld1q_f32(a + i + 8);
+        float32x4_t vecA3 = vld1q_f32(a + i + 12);
         
-        acc = vfmaq_f32(acc, vecA, vecB); // do FMA
+        float32x4_t vecB0 = vld1q_f32(b + i); // load in values from b
+        float32x4_t vecB1 = vld1q_f32(b + i + 4);
+        float32x4_t vecB2 = vld1q_f32(b + i + 8);
+        float32x4_t vecB3 = vld1q_f32(b + i + 12);
+        
+        acc0 = vfmaq_f32(acc0, vecA0, vecB0); // do FMA
+        acc1 = vfmaq_f32(acc1, vecA1, vecB1);
+        acc2 = vfmaq_f32(acc2, vecA2, vecB2);
+        acc3 = vfmaq_f32(acc3, vecA3, vecB3);
     }
     
     // now we have everything summed but its still 4 floats in the acc
-    float total = vaddvq_f32(acc); // sum 4 vals
+    acc0 = vaddq_f32(acc0, acc1);
+    acc2 = vaddq_f32(acc2, acc3);
+    
+    acc0 = vaddq_f32(acc0, acc2);
+    
+    float total = vaddvq_f32(acc0);
 #endif
     
     
