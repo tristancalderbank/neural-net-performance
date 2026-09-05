@@ -1,12 +1,5 @@
 Optimizing performance of hand-coded neural net.
 
-**Benchmark hardware**
-
-| Spec | Windows | Mac |
-| --- | --- | --- |
-| CPU | Intel Core i7-10700K @ 3.80 GHz | Apple M1 Pro @ 3.2 GHz |
-| Cores / logical processors | 8 / 16 | 10 / 10 |
-
 **Network**
 
 - Architecture: 784 -> 256 -> 256 -> 10, sigmoid activations
@@ -17,6 +10,15 @@ Optimizing performance of hand-coded neural net.
 - Dataset: MNIST
 - Training images: 60,000
 - Initial accuracy: 99.80% training; 98.28% test
+
+**Benchmark hardware**
+
+| Spec | Windows | Mac |
+| --- | --- | --- |
+| CPU | Intel Core i7-10700K @ 3.80 GHz | Apple M1 Pro @ 3.2 GHz |
+| Cores / logical processors | 8 / 16 | 10 / 10 |
+
+**Performance**
 
 <table>
   <thead>
