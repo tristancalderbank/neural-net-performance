@@ -2,7 +2,12 @@
 
 #include <cmath>
 #include <random>
+
+#if defined(NNP_PLATFORM_MACOS)
+#include <arm_neon.h>
+#elif defined(NNP_PLATFORM_WINDOWS)
 #include <immintrin.h>
+#endif
 
 float layer1Weights[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
 float layer1WeightsGradTotal[HIDDEN_LAYER_SIZE][INPUT_LAYER_SIZE];
@@ -60,6 +65,7 @@ void initializeNetwork()
 
 inline float dotProductSIMD(const float* a, const float* b, int size)
 {
+#if defined(NNP_PLATFORM_WINDOWS)
     constexpr int batch = sizeof(__m256) / sizeof(float);
 
     __m256 acc = _mm256_setzero_ps(); // zero accumulator [0, 0, 0, 0, 0, 0, 0, 0]
@@ -84,7 +90,26 @@ inline float dotProductSIMD(const float* a, const float* b, int size)
     sum = _mm_hadd_ps(sum, sum); // now result is in lane 0
 
     float total = _mm_cvtss_f32(sum); // extract lowest lane
-
+#elif defined(NNP_PLATFORM_MACOS)
+    constexpr int batch = sizeof(float32x4_t) / sizeof(float);
+    
+    float32x4_t acc = vdupq_n_f32(0.0f); // zero accumulator [0, 0, 0, 0]
+    
+    int i = 0;
+    
+    for (; i + batch <= size; i += batch)
+    {
+        float32x4_t vecA = vld1q_f32(a + i); // load in values from a
+        float32x4_t vecB = vld1q_f32(b + i); // load in values from b
+        
+        acc = vfmaq_f32(acc, vecA, vecB); // do FMA
+    }
+    
+    // now we have everything summed but its still 4 floats in the acc
+    float total = vaddvq_f32(acc); // sum 4 vals
+#endif
+    
+    
     // handle tail less than 8
     for (; i < size; i++)
     {

@@ -6,7 +6,12 @@
 #include <filesystem>
 #include <string>
 #include <cmath>
+
+#if defined(NNP_PLATFORM_MACOS)
+#include <arm_neon.h>
+#elif defined(NNP_PLATFORM_WINDOWS)
 #include <immintrin.h>
+#endif
 
 #include "network.h"
 #include "model_io.h"
@@ -143,6 +148,7 @@ void calculateGradientBackPropagation(const Image& image)
 
         layer1BiasGradTotal[currIndex] += biasGrad;
 
+#if defined(NNP_PLATFORM_WINDOWS)
         constexpr int batch = sizeof(__m256) / sizeof(float);
         int prevIndex = 0;
 
@@ -157,6 +163,22 @@ void calculateGradientBackPropagation(const Image& image)
 
             _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal);
         }
+#elif defined(NNP_PLATFORM_MACOS)
+        constexpr int batch = sizeof(float32x4_t) / sizeof(float);
+        int prevIndex = 0;
+        
+        float32x4_t vbiasGrad = vdupq_n_f32(biasGrad);
+
+        for (; prevIndex + batch <= INPUT_LAYER_SIZE; prevIndex += batch)
+        {
+            float32x4_t vlayer1WeightsGradTotal = vld1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex);
+            float32x4_t vactivationPrev = vld1q_f32(inputLayerActivation + prevIndex);
+
+            vlayer1WeightsGradTotal = vfmaq_f32(vlayer1WeightsGradTotal, vbiasGrad, vactivationPrev);
+
+            vst1q_f32(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal);
+        }
+#endif
 
         for (; prevIndex < INPUT_LAYER_SIZE; prevIndex++)
         {
