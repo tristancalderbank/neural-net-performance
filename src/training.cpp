@@ -149,19 +149,33 @@ void calculateGradientBackPropagation(const Image& image)
         layer1BiasGradTotal[currIndex] += biasGrad;
 
 #if defined(NNP_PLATFORM_WINDOWS)
-        constexpr int batch = sizeof(__m256) / sizeof(float);
+        // tried 8-way but saw no improvement
+        constexpr int batch = sizeof(__m256) / sizeof(float) * 4;
         int prevIndex = 0;
 
         __m256 vbiasGrad = _mm256_set1_ps(biasGrad);
 
         for (; prevIndex + batch <= INPUT_LAYER_SIZE; prevIndex += batch)
         {
-            __m256 vlayer1WeightsGradTotal = _mm256_loadu_ps(layer1WeightsGradTotal[currIndex] + prevIndex);
-            __m256 vactivationPrev = _mm256_loadu_ps(inputLayerActivation + prevIndex);
+            __m256 vlayer1WeightsGradTotal0 = _mm256_loadu_ps(layer1WeightsGradTotal[currIndex] + prevIndex);
+            __m256 vlayer1WeightsGradTotal1 = _mm256_loadu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 8);
+            __m256 vlayer1WeightsGradTotal2 = _mm256_loadu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 16);
+            __m256 vlayer1WeightsGradTotal3 = _mm256_loadu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 24);
 
-            vlayer1WeightsGradTotal = _mm256_fmadd_ps(vbiasGrad, vactivationPrev, vlayer1WeightsGradTotal);
+            __m256 vactivationPrev0 = _mm256_loadu_ps(inputLayerActivation + prevIndex);
+            __m256 vactivationPrev1 = _mm256_loadu_ps(inputLayerActivation + prevIndex + 8);
+            __m256 vactivationPrev2 = _mm256_loadu_ps(inputLayerActivation + prevIndex + 16);
+            __m256 vactivationPrev3 = _mm256_loadu_ps(inputLayerActivation + prevIndex + 24);
 
-            _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal);
+            vlayer1WeightsGradTotal0 = _mm256_fmadd_ps(vbiasGrad, vactivationPrev0, vlayer1WeightsGradTotal0);
+            vlayer1WeightsGradTotal1 = _mm256_fmadd_ps(vbiasGrad, vactivationPrev1, vlayer1WeightsGradTotal1);
+            vlayer1WeightsGradTotal2 = _mm256_fmadd_ps(vbiasGrad, vactivationPrev2, vlayer1WeightsGradTotal2);
+            vlayer1WeightsGradTotal3 = _mm256_fmadd_ps(vbiasGrad, vactivationPrev3, vlayer1WeightsGradTotal3);
+
+            _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex, vlayer1WeightsGradTotal0);
+            _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 8, vlayer1WeightsGradTotal1);
+            _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 16, vlayer1WeightsGradTotal2);
+            _mm256_storeu_ps(layer1WeightsGradTotal[currIndex] + prevIndex + 24, vlayer1WeightsGradTotal3);
         }
 #elif defined(NNP_PLATFORM_MACOS)
         constexpr int batch = sizeof(float32x4_t) / sizeof(float);

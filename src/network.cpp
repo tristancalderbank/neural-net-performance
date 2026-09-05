@@ -66,23 +66,64 @@ void initializeNetwork()
 inline float dotProductSIMD(const float* a, const float* b, int size)
 {
 #if defined(NNP_PLATFORM_WINDOWS)
-    constexpr int batch = sizeof(__m256) / sizeof(float);
+    constexpr int batch = (sizeof(__m256) / sizeof(float)) * 8;
 
-    __m256 acc = _mm256_setzero_ps(); // zero accumulator [0, 0, 0, 0, 0, 0, 0, 0]
+    __m256 acc0 = _mm256_setzero_ps(); // zero accumulator [0, 0, 0, 0, 0, 0, 0, 0]
+    __m256 acc1 = _mm256_setzero_ps();
+    __m256 acc2 = _mm256_setzero_ps();
+    __m256 acc3 = _mm256_setzero_ps();
+    __m256 acc4 = _mm256_setzero_ps();
+    __m256 acc5 = _mm256_setzero_ps();
+    __m256 acc6 = _mm256_setzero_ps();
+    __m256 acc7 = _mm256_setzero_ps();
 
     int i = 0;
 
     for (; i + batch <= size; i += batch)
     {
-        __m256 vecA = _mm256_loadu_ps(a + i); // load in values from a
-        __m256 vecB = _mm256_loadu_ps(b + i); // load in values from b
+        __m256 vec0A = _mm256_loadu_ps(a + i); // load in values from a
+        __m256 vec1A = _mm256_loadu_ps(a + i + 8);
+        __m256 vec2A = _mm256_loadu_ps(a + i + 16);
+        __m256 vec3A = _mm256_loadu_ps(a + i + 24);
+        __m256 vec4A = _mm256_loadu_ps(a + i + 32);
+        __m256 vec5A = _mm256_loadu_ps(a + i + 40);
+        __m256 vec6A = _mm256_loadu_ps(a + i + 48);
+        __m256 vec7A = _mm256_loadu_ps(a + i + 56);
 
-        acc = _mm256_fmadd_ps(vecA, vecB, acc); // do FMA
+
+        __m256 vec0B = _mm256_loadu_ps(b + i); // load in values from b
+        __m256 vec1B = _mm256_loadu_ps(b + i + 8);
+        __m256 vec2B = _mm256_loadu_ps(b + i + 16);
+        __m256 vec3B = _mm256_loadu_ps(b + i + 24);
+        __m256 vec4B = _mm256_loadu_ps(b + i + 32);
+        __m256 vec5B = _mm256_loadu_ps(b + i + 40);
+        __m256 vec6B = _mm256_loadu_ps(b + i + 48);
+        __m256 vec7B = _mm256_loadu_ps(b + i + 56);
+
+
+        acc0 = _mm256_fmadd_ps(vec0A, vec0B, acc0); // do FMA
+        acc1 = _mm256_fmadd_ps(vec1A, vec1B, acc1);
+        acc2 = _mm256_fmadd_ps(vec2A, vec2B, acc2);
+        acc3 = _mm256_fmadd_ps(vec3A, vec3B, acc3);
+        acc4 = _mm256_fmadd_ps(vec4A, vec4B, acc4);
+        acc5 = _mm256_fmadd_ps(vec5A, vec5B, acc5);
+        acc6 = _mm256_fmadd_ps(vec6A, vec6B, acc6);
+        acc7 = _mm256_fmadd_ps(vec7A, vec7B, acc7);
     }
 
+    acc0 = _mm256_add_ps(acc0, acc1);
+    acc2 = _mm256_add_ps(acc2, acc3);
+    acc4 = _mm256_add_ps(acc4, acc5);
+    acc6 = _mm256_add_ps(acc6, acc7);
+
+    acc0 = _mm256_add_ps(acc0, acc2);
+    acc4 = _mm256_add_ps(acc4, acc6);
+
+    acc0 = _mm256_add_ps(acc0, acc4);
+
     // now we have everything summed but its still 8 floats in the acc
-    __m128 low = _mm256_castps256_ps128(acc); // extract lower lanes
-    __m128 high = _mm256_extractf128_ps(acc, 1); // extract upper lanes
+    __m128 low = _mm256_castps256_ps128(acc0); // extract lower lanes
+    __m128 high = _mm256_extractf128_ps(acc0, 1); // extract upper lanes
 
     __m128 sum = _mm_add_ps(low, high); // add low and high
 
@@ -110,7 +151,7 @@ inline float dotProductSIMD(const float* a, const float* b, int size)
 #endif
     
     
-    // handle tail less than 8
+    // handle tail less than batch size
     for (; i < size; i++)
     {
         total += a[i] * b[i];
