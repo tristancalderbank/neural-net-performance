@@ -33,9 +33,9 @@ Optimizing performance of hand-coded neural net.
     </tr>
   </thead>
   <tbody>
-    <tr><td>initial naive implementation (c++)</td><td>685.3s</td><td>2.257s</td><td></td><td></td></tr>
-    <tr><td>loop reordering</td><td>565.3s</td><td>2.257s</td><td></td><td></td></tr>
-    <tr><td>fma intrinsics for forward pass dot products</td><td>223.8s</td><td>0.338s</td><td></td><td></td></tr>
-    <tr><td>fma intrinsics for layer 1 gradient calc</td><td>133.7s</td><td>0.338s</td><td>174.6s</td><td>0.5974s</td></tr>
+    <tr><td>initial naive implementation (c++)</td><td>685.3s</td><td>2.257s</td><td>577.5s</td><td>2.086s</td></tr>
+    <tr><td>loop reordering</td><td>565.3s</td><td>2.257s</td><td>437.3s</td><td>2.089s</td></tr>
+    <tr><td>fma intrinsics for forward pass dot products</td><td>223.8s</td><td>0.338s</td><td>171.4s</td><td>0.597s</td></tr>
+    <tr><td>fma intrinsics for layer 1 gradient calc</td><td>133.7s</td><td>0.338s</td><td>174.6s</td><td>0.597s</td></tr>
   </tbody>
 </table>
